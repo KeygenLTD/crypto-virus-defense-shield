@@ -1,0 +1,7 @@
+# Test artifacts - never commit real samples
+crypto-test/
+*.dmp
+*.bin
+__pycache__/
+.venv/
+*.log
