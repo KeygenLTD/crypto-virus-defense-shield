@@ -13,8 +13,35 @@ from datetime import datetime
 # Safe isolated directory - NEVER monitor whole system in demo
 TEST_DIR = Path(os.environ.get("TEMP", "C:/Temp")) / "opencode" / "crypto-test"
 LOG_FILE = Path(os.environ.get("TEMP", "C:/Temp")) / "opencode" / "crypto-virus-defense-shield.log"
+LOCK_FILE = Path(os.environ.get("TEMP", "C:/Temp")) / "opencode" / "cvds.lock"
 HONEYPOT_FILES = ["ZZZ_TRAP.docx", "ZZZ_TRAP.xlsx", "DO_NOT_TOUCH.txt"]
 THRESHOLD_MODS_PER_SEC = 3
+
+def ensure_single_instance():
+    """Prevent double-run via lock file + mutex"""
+    LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        # Try Windows mutex via msvcrt file lock
+        import msvcrt
+        global _lock_fh
+        _lock_fh = open(LOCK_FILE, "w")
+        msvcrt.locking(_lock_fh.fileno(), msvcrt.LK_NBLCK, 1)
+        # Write pid
+        _lock_fh.write(str(os.getpid()))
+        _lock_fh.flush()
+        return True
+    except (ImportError, OSError, IOError):
+        # msvcrt failed -> already locked
+        log.error("Another instance is already running. Check system tray.")
+        try:
+            # Try to notify via tray if possible
+            from plyer import notification as ply
+            ply.notify(title="CVDS Already Running", message="Shield is already active in system tray.")
+        except:
+            pass
+        # Also try pystray notification fallback
+        print("[!] Already running - check system tray near clock. Exiting.")
+        sys.exit(0)
 
 # Logging setup
 LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -210,4 +237,5 @@ if __name__ == "__main__":
     if str(TEST_DIR).lower() in ["c:\\", "c:/", str(Path.home()).lower()]:
         print("[FATAL] Refusing to monitor system root")
         sys.exit(1)
+    ensure_single_instance()
     main()
