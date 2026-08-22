@@ -22,13 +22,23 @@ jobs:
       - name: Build EXE (onefile, tray)
         run: |
           pyinstaller --onefile --noconsole --add-data "locales;locales" --add-data "src/i18n;src/i18n" --hidden-import src.i18n --hidden-import src.i18n.translator --collect-submodules src --name CryptoVirusDefenseShield src/interceptor/detector.py
+      - name: Build Installer (Inno Setup)
+        run: |
+          choco install innosetup -y
+          iscc installer/setup.iss
+          dir dist
+
       - name: Upload EXE artifact
         uses: actions/upload-artifact@v6
         with:
           name: CryptoVirusDefenseShield-windows
-          path: dist/CryptoVirusDefenseShield.exe
+          path: |
+            dist/CryptoVirusDefenseShield.exe
+            dist/CVDS-Setup-*.exe
       - name: Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2.4.1
         with:
-          files: dist/CryptoVirusDefenseShield.exe
+          files: |
+            dist/CryptoVirusDefenseShield.exe
+            dist/CVDS-Setup-*.exe

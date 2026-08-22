@@ -12,6 +12,7 @@
   "status_watching": "Watching",
   "status_detections": "Detections",
   "status_log": "Log",
+  "tray_autostart": "Run at startup",
   "about_text": "Crypto Virus Defense Shield v0.2.0\nHoneypot + CryptoAPI interceptor\nhttps://github.com/KeygenLTD/crypto-virus-defense-shield",
   "log_honeypot_ready": "Honeypot ready at",
   "log_shield_active": "Shield active. Monitoring",
