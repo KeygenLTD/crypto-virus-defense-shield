@@ -21,7 +21,7 @@ jobs:
           pip install pyinstaller
       - name: Build EXE (onefile, tray)
         run: |
-          pyinstaller --onefile --noconsole --name CryptoVirusDefenseShield src/interceptor/detector.py
+          pyinstaller --onefile --noconsole --add-data "locales;locales" --add-data "src/i18n;src/i18n" --hidden-import src.i18n --hidden-import src.i18n.translator --collect-submodules src --name CryptoVirusDefenseShield src/interceptor/detector.py
       - name: Upload EXE artifact
         uses: actions/upload-artifact@v6
         with:

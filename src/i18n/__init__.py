@@ -1,9 +1,16 @@
 """i18n loader - src/i18n/__init__.py:1"""
 import json
 import os
+import sys
 from pathlib import Path
 
-LOCALES_DIR = Path(__file__).parent.parent.parent / "locales"
+def _get_locales_dir():
+    # PyInstaller support: files are in _MEIPASS
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        return Path(sys._MEIPASS) / "locales"
+    return Path(__file__).parent.parent.parent / "locales"
+
+LOCALES_DIR = _get_locales_dir()
 CONFIG_FILE = Path(os.environ.get("TEMP", "C:/Temp")) / "opencode" / "cvds_lang.txt"
 DEFAULT_LANG = "en"
 

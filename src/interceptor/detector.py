@@ -13,11 +13,19 @@ try:
     from src.i18n import t, get_current_lang, set_lang, get_available_languages
     HAS_I18N = True
 except ImportError:
-    HAS_I18N = False
-    def t(k, lang=None): return k
-    def get_current_lang(): return "en"
-    def set_lang(l): return
-    def get_available_languages(): return ["en"]
+    try:
+        # Fallback for PyInstaller frozen (src packaged as src.i18n)
+        import importlib.util, pathlib
+        # Try direct file execution fallback
+        from i18n import t as _t2, get_current_lang as _g2, set_lang as _s2, get_available_languages as _ga2
+        t, get_current_lang, set_lang, get_available_languages = _t2, _g2, _s2, _ga2
+        HAS_I18N = True
+    except ImportError:
+        HAS_I18N = False
+        def t(k, lang=None): return k
+        def get_current_lang(): return "en"
+        def set_lang(l): return
+        def get_available_languages(): return ["en"]
 
 # Safe isolated directory - NEVER monitor whole system in demo
 TEST_DIR = Path(os.environ.get("TEMP", "C:/Temp")) / "opencode" / "crypto-test"
@@ -133,6 +141,35 @@ def create_icon_image():
     d.text((26,22), "S", fill="#0ea5e9")
     return img
 
+def is_autostart_enabled():
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_READ)
+        val, _ = winreg.QueryValueEx(key, "CryptoVirusDefenseShield")
+        winreg.CloseKey(key)
+        return True
+    except:
+        return False
+
+def set_autostart(enable: bool):
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_WRITE)
+        if enable:
+            exe = sys.executable if getattr(sys, 'frozen', False) else f'"{sys.executable}" "{Path(__file__).resolve()}"'
+            # For frozen, sys.executable is the exe itself
+            winreg.SetValueEx(key, "CryptoVirusDefenseShield", 0, winreg.REG_SZ, exe)
+        else:
+            try:
+                winreg.DeleteValue(key, "CryptoVirusDefenseShield")
+            except FileNotFoundError:
+                pass
+        winreg.CloseKey(key)
+        return True
+    except Exception as e:
+        log.error(f"Autostart failed: {e}")
+        return False
+
 def run_tray(handler, observer):
     icon = None
     def get_status_text():
@@ -140,12 +177,18 @@ def run_tray(handler, observer):
         return f"{t('status_active', lang)}\n{t('status_watching', lang)}: {TEST_DIR}\n{t('status_detections', lang)}: {handler.detections}\n{t('status_log', lang)}: {LOG_FILE}"
 
     def on_show_log(icon, item):
-        os.startfile(str(LOG_FILE)) if os.path.exists(LOG_FILE) else log.info("Log not yet created")
-        if os.path.exists(LOG_FILE):
+        # Only open the log file itself, not the whole opencode folder
+        if LOG_FILE.exists():
             try:
-                os.startfile(str(LOG_FILE.parent))
-            except:
-                pass
+                os.startfile(str(LOG_FILE))
+            except Exception:
+                # fallback: open with notepad
+                os.system(f'notepad "{LOG_FILE}"')
+        else:
+            log.info("Log not yet created")
+            try:
+                icon.notify("Log not yet created", t('app_name'))
+            except: pass
 
     def on_about(icon, item):
         try:
@@ -172,49 +215,59 @@ def run_tray(handler, observer):
 
     def make_lang_handler(lang_code, lang_name=""):
         def handler(icon, item):
-            # If file doesn't exist, auto-translate first (free MyMemory)
             from pathlib import Path as _P
-            loc = _P(__file__).parent.parent.parent / "locales" / f"{lang_code}.json"
+            # Check both bundled and writable locales
+            try:
+                from src.i18n import LOCALES_DIR as _LD
+                loc = _LD / f"{lang_code}.json"
+            except:
+                loc = _P(__file__).parent.parent.parent / "locales" / f"{lang_code}.json"
             if not loc.exists():
                 try:
                     icon.notify(f"Translating to {lang_name or lang_code}... please wait", t('tray_language'))
                 except: pass
                 try:
-                    from src.i18n.translator import auto_generate
+                    try:
+                        from src.i18n.translator import auto_generate
+                    except ImportError:
+                        from i18n.translator import auto_generate
                     ok = auto_generate(lang_code)
                     if ok:
                         log.info(f"Auto-translated to {lang_code}")
                 except Exception as e:
                     log.error(f"Auto-translate failed: {e}")
             set_lang(lang_code)
-            log.info(f"Language switched to {lang_code} - restart tray to apply")
+            log.info(f"Language switched to {lang_code}")
             try:
-                icon.notify(f"Language: {lang_name or lang_code} - restart app to apply", t('tray_language'))
+                icon.notify(f"Language: {lang_name or lang_code} applied", t('tray_language'))
             except:
                 pass
         return handler
 
-    # Build language submenu - existing + popular auto-generate list
+    # Build language submenu - existing + auto-generate on demand
     try:
         from src.i18n.translator import POPULAR_LANGS
     except:
         POPULAR_LANGS = [("en","English"), ("tr","Türkçe")]
     langs = get_available_languages()
-    # Existing langs
-    lang_items = [pystray.MenuItem(f"{code} - {name} {'✓' if code==get_current_lang() else ''}", make_lang_handler(code, name)) for code, name in POPULAR_LANGS if code in langs]
-    # Auto-generate candidates (not yet existing)
-    more_items = [pystray.MenuItem(f"{code} - {name} (auto-translate)", make_lang_handler(code, name)) for code, name in POPULAR_LANGS if code not in langs]
-    if more_items:
-        lang_items.append(pystray.Menu.SEPARATOR)
-        lang_items.extend(more_items)
+    lang_items = []
+    for code, name in POPULAR_LANGS:
+        exists = code in langs
+        label = f"{name} {'✓' if code==get_current_lang() else ''}" + ("" if exists else " (auto)")
+        lang_items.append(pystray.MenuItem(label, make_lang_handler(code, name)))
 
-    def on_add_language(icon, item):
-        log.info("Tip: pick any language - it will auto-translate via free API on first select")
+    def on_toggle_autostart(icon, item):
+        new_state = not is_autostart_enabled()
+        set_autostart(new_state)
+        try:
+            icon.notify(f"Autostart {'enabled' if new_state else 'disabled'}", t('app_name'))
+        except: pass
 
     menu = pystray.Menu(
         pystray.MenuItem(lambda item: t('tray_status'), on_status),
         pystray.MenuItem(lambda item: t('tray_open_log'), on_show_log),
-        pystray.MenuItem(t('tray_language'), pystray.Menu(*lang_items, pystray.MenuItem("More... (auto)", None))),
+        pystray.MenuItem(lambda item: t('tray_language'), pystray.Menu(*lang_items)),
+        pystray.MenuItem(lambda item: f"{'☑' if is_autostart_enabled() else '☐'} {t('tray_autostart') if t('tray_autostart')!='tray_autostart' else 'Run at startup'}", on_toggle_autostart),
         pystray.MenuItem(lambda item: t('tray_about'), on_about),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem(lambda item: t('tray_exit'), on_exit)
