@@ -170,32 +170,51 @@ def run_tray(handler, observer):
         except:
             log.info(get_status_text())
 
-    def make_lang_handler(lang_code):
+    def make_lang_handler(lang_code, lang_name=""):
         def handler(icon, item):
+            # If file doesn't exist, auto-translate first (free MyMemory)
+            from pathlib import Path as _P
+            loc = _P(__file__).parent.parent.parent / "locales" / f"{lang_code}.json"
+            if not loc.exists():
+                try:
+                    icon.notify(f"Translating to {lang_name or lang_code}... please wait", t('tray_language'))
+                except: pass
+                try:
+                    from src.i18n.translator import auto_generate
+                    ok = auto_generate(lang_code)
+                    if ok:
+                        log.info(f"Auto-translated to {lang_code}")
+                except Exception as e:
+                    log.error(f"Auto-translate failed: {e}")
             set_lang(lang_code)
             log.info(f"Language switched to {lang_code} - restart tray to apply")
             try:
-                icon.notify(f"Language: {lang_code} - restart app to apply", t('tray_language'))
+                icon.notify(f"Language: {lang_name or lang_code} - restart app to apply", t('tray_language'))
             except:
                 pass
         return handler
 
-    # Build language submenu dynamically
+    # Build language submenu - existing + popular auto-generate list
+    try:
+        from src.i18n.translator import POPULAR_LANGS
+    except:
+        POPULAR_LANGS = [("en","English"), ("tr","Türkçe")]
     langs = get_available_languages()
-    lang_items = [pystray.MenuItem(f"{l} {'✓' if l==get_current_lang() else ''}", make_lang_handler(l)) for l in langs]
-    # Extra: add AI generate for new lang
+    # Existing langs
+    lang_items = [pystray.MenuItem(f"{code} - {name} {'✓' if code==get_current_lang() else ''}", make_lang_handler(code, name)) for code, name in POPULAR_LANGS if code in langs]
+    # Auto-generate candidates (not yet existing)
+    more_items = [pystray.MenuItem(f"{code} - {name} (auto-translate)", make_lang_handler(code, name)) for code, name in POPULAR_LANGS if code not in langs]
+    if more_items:
+        lang_items.append(pystray.Menu.SEPARATOR)
+        lang_items.extend(more_items)
+
     def on_add_language(icon, item):
-        # Simple: ask via log - user can create locales/xx.json and AI will fill
-        log.info("To add language: create locales/<code>.json or set LLM_API_KEY and restart - AI will auto-generate")
-        try:
-            icon.notify("Create locales/<code>.json - AI will auto-fill on next start", "Add Language")
-        except:
-            pass
+        log.info("Tip: pick any language - it will auto-translate via free API on first select")
 
     menu = pystray.Menu(
         pystray.MenuItem(lambda item: t('tray_status'), on_status),
         pystray.MenuItem(lambda item: t('tray_open_log'), on_show_log),
-        pystray.MenuItem(t('tray_language'), pystray.Menu(*lang_items, pystray.MenuItem("Add new...", on_add_language))),
+        pystray.MenuItem(t('tray_language'), pystray.Menu(*lang_items, pystray.MenuItem("More... (auto)", None))),
         pystray.MenuItem(lambda item: t('tray_about'), on_about),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem(lambda item: t('tray_exit'), on_exit)
