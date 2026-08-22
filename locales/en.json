@@ -1,0 +1,20 @@
+{
+  "app_name": "Crypto Virus Defense Shield",
+  "tray_status": "Status",
+  "tray_open_log": "Open Log",
+  "tray_about": "About",
+  "tray_exit": "Exit",
+  "tray_language": "Language",
+  "tray_shield_active": "Shield active - watching honeypot files",
+  "tray_already_running": "Shield is already active in system tray.",
+  "tray_threat_title": "THREAT DETECTED!",
+  "status_active": "Shield Active",
+  "status_watching": "Watching",
+  "status_detections": "Detections",
+  "status_log": "Log",
+  "about_text": "Crypto Virus Defense Shield v0.2.0\nHoneypot + CryptoAPI interceptor\nhttps://github.com/KeygenLTD/crypto-virus-defense-shield",
+  "log_honeypot_ready": "Honeypot ready at",
+  "log_shield_active": "Shield active. Monitoring",
+  "alert_ransomware": "Ransomware behavior detected!",
+  "alert_reason": "Reason"
+}

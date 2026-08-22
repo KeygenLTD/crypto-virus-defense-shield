@@ -1,0 +1,20 @@
+{
+  "app_name": "Crypto Virus Defense Shield",
+  "tray_status": "Durum",
+  "tray_open_log": "Log'u Aç",
+  "tray_about": "Hakkında",
+  "tray_exit": "Çıkış",
+  "tray_language": "Dil",
+  "tray_shield_active": "Kalkan aktif - yem dosyalar izleniyor",
+  "tray_already_running": "Kalkan zaten sistem tepsisinde aktif.",
+  "tray_threat_title": "TEHDİT ALGILANDI!",
+  "status_active": "Kalkan Aktif",
+  "status_watching": "İzlenen",
+  "status_detections": "Algılama",
+  "status_log": "Log",
+  "about_text": "Crypto Virus Defense Shield v0.2.0\nHoneypot + CryptoAPI yakalayıcı\nhttps://github.com/KeygenLTD/crypto-virus-defense-shield",
+  "log_honeypot_ready": "Yem hazır",
+  "log_shield_active": "Kalkan aktif. İzleniyor",
+  "alert_ransomware": "Fidye virüsü davranışı algılandı!",
+  "alert_reason": "Sebep"
+}

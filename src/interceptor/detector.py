@@ -9,6 +9,15 @@ import threading
 import logging
 from pathlib import Path
 from datetime import datetime
+try:
+    from src.i18n import t, get_current_lang, set_lang, get_available_languages
+    HAS_I18N = True
+except ImportError:
+    HAS_I18N = False
+    def t(k, lang=None): return k
+    def get_current_lang(): return "en"
+    def set_lang(l): return
+    def get_available_languages(): return ["en"]
 
 # Safe isolated directory - NEVER monitor whole system in demo
 TEST_DIR = Path(os.environ.get("TEMP", "C:/Temp")) / "opencode" / "crypto-test"
@@ -32,15 +41,9 @@ def ensure_single_instance():
         return True
     except (ImportError, OSError, IOError):
         # msvcrt failed -> already locked
-        log.error("Another instance is already running. Check system tray.")
-        try:
-            # Try to notify via tray if possible
-            from plyer import notification as ply
-            ply.notify(title="CVDS Already Running", message="Shield is already active in system tray.")
-        except:
-            pass
-        # Also try pystray notification fallback
-        print("[!] Already running - check system tray near clock. Exiting.")
+        already = t('tray_already_running') if HAS_I18N else "Already running"
+        log.error(already)
+        print(f"[!] {already} - check system tray near clock. Exiting.")
         sys.exit(0)
 
 # Logging setup
@@ -133,7 +136,8 @@ def create_icon_image():
 def run_tray(handler, observer):
     icon = None
     def get_status_text():
-        return f"Shield Active\nWatching: {TEST_DIR}\nDetections: {handler.detections}\nLog: {LOG_FILE}"
+        lang = get_current_lang()
+        return f"{t('status_active', lang)}\n{t('status_watching', lang)}: {TEST_DIR}\n{t('status_detections', lang)}: {handler.detections}\n{t('status_log', lang)}: {LOG_FILE}"
 
     def on_show_log(icon, item):
         os.startfile(str(LOG_FILE)) if os.path.exists(LOG_FILE) else log.info("Log not yet created")
@@ -144,12 +148,11 @@ def run_tray(handler, observer):
                 pass
 
     def on_about(icon, item):
-        # Use notification if available
         try:
-            icon.notify("Crypto Virus Defense Shield\nv0.1.0 - Honeypot + CryptoAPI interceptor\nhttps://github.com/KeygenLTD/crypto-virus-defense-shield", "About CVDS")
+            icon.notify(t('about_text'), t('tray_about'))
         except:
             pass
-        log.info("About: https://github.com/KeygenLTD/crypto-virus-defense-shield")
+        log.info(t('about_text'))
 
     def on_exit(icon, item):
         log.info("Exiting via tray")
@@ -163,23 +166,46 @@ def run_tray(handler, observer):
 
     def on_status(icon, item):
         try:
-            icon.notify(get_status_text(), "Shield Status")
+            icon.notify(get_status_text(), t('tray_status'))
         except:
             log.info(get_status_text())
 
+    def make_lang_handler(lang_code):
+        def handler(icon, item):
+            set_lang(lang_code)
+            log.info(f"Language switched to {lang_code} - restart tray to apply")
+            try:
+                icon.notify(f"Language: {lang_code} - restart app to apply", t('tray_language'))
+            except:
+                pass
+        return handler
+
+    # Build language submenu dynamically
+    langs = get_available_languages()
+    lang_items = [pystray.MenuItem(f"{l} {'✓' if l==get_current_lang() else ''}", make_lang_handler(l)) for l in langs]
+    # Extra: add AI generate for new lang
+    def on_add_language(icon, item):
+        # Simple: ask via log - user can create locales/xx.json and AI will fill
+        log.info("To add language: create locales/<code>.json or set LLM_API_KEY and restart - AI will auto-generate")
+        try:
+            icon.notify("Create locales/<code>.json - AI will auto-fill on next start", "Add Language")
+        except:
+            pass
+
     menu = pystray.Menu(
-        pystray.MenuItem("Status", on_status),
-        pystray.MenuItem("Open Log", on_show_log),
-        pystray.MenuItem("About", on_about),
+        pystray.MenuItem(lambda item: t('tray_status'), on_status),
+        pystray.MenuItem(lambda item: t('tray_open_log'), on_show_log),
+        pystray.MenuItem(t('tray_language'), pystray.Menu(*lang_items, pystray.MenuItem("Add new...", on_add_language))),
+        pystray.MenuItem(lambda item: t('tray_about'), on_about),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("Exit", on_exit)
+        pystray.MenuItem(lambda item: t('tray_exit'), on_exit)
     )
     icon = pystray.Icon("CVDS", create_icon_image(), "Crypto Virus Defense Shield - Active", menu)
     # notify on start
     def setup(icon):
         icon.visible = True
         try:
-            icon.notify("Shield active - watching honeypot files", "Crypto Virus Defense Shield")
+            icon.notify(t('tray_shield_active'), t('app_name'))
         except:
             pass
     threading.Thread(target=lambda: icon.run(setup), daemon=True).start()
