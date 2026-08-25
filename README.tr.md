@@ -12,19 +12,20 @@ Açık kaynak **davranışsal** fidye yazılımı savunma çatısı. İmzaya day
 ### Neden CVDS?
 Antivirüs yeni virüsü tanımaz (imza yoksa). CVDS virüs ne olursa olsun `CryptEncrypt` çağırdığı anda yakalar.
 
-### Hızlı Başlangıç (Güvenli Demo)
-Sadece `.../Temp/opencode/crypto-test` klasörüne dokunur.
+### Hızlı Başlangıç
 
+**Kullanıcılar için (kurulum):** Releases'ten `CVDS-Setup-0.2.0.exe` indir -> Kur -> Sağ altta kalkan belirir. Python gerekmez.
+
+**Geliştiriciler için (güvenli demo):** Demo sadece kendi izole test klasörünü kullanır, gerçek dosyalarınıza dokunmaz.
 ```bash
+git clone https://github.com/KeygenLTD/crypto-virus-defense-shield.git
+cd crypto-virus-defense-shield
 pip install -r requirements.txt
 python src/interceptor/detector.py  # Sistem tepsisinde kalkan belirir
 python src/simulator/fake_ransomware.py  # -> [SHIELD] Tehdit algılandı!
 ```
 
-### İndir
-Releases kısmından `CryptoVirusDefenseShield.exe` indir — kurulum yok, çift tıkla sağ altta çalışır. Dil: Tepsi -> Language -> TR/EN.
-
 ### Dil Desteği
-`sistem dili TR ise otomatik Türkçe`, değilse İngilizce. `locales/tr.json` ve `en.json` var. Yeni dil için `locales/fr.json` ekle, AI placeholder oluşturur.
+Sistem dili TR ise otomatik Türkçe. Tepsi -> Dil ile değiştirilebilir. Yeni dil seçince ücretsiz API ile otomatik çevrilir.
 
 English version: [README.md](README.md)

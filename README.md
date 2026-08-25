@@ -37,29 +37,30 @@ Honeypot touched? ──No──> High-freq CryptEncrypt (>50/sec)? ──No─�
 2.  **CryptoAPI Interceptor** — Hooks `advapi32.dll!CryptEncrypt` / `bcrypt.dll!BCryptEncrypt`. Flags high-frequency encryption + shadow copy deletion (`vssadmin delete shadows`).
 3.  **Memory Hunter** — Scans process RAM for AES key schedules (high-entropy 32-byte sequences) and dumps keys before exit.
 
-### Quick Start (100% Safe Demo)
+### For Users (No Python Needed)
 
-This demo only touches `C:\Users\<you>\AppData\Local\Temp\opencode\crypto-test\`. No system files.
+1.  Go to **Releases** → Download `CVDS-Setup-0.2.0.exe` (installer) or `CryptoVirusDefenseShield.exe` (portable)
+2.  Run → Shield appears in system tray (near clock) → Done. It auto-starts on boot.
+
+### For Developers (Safe Demo)
+
+> Demo is 100% safe — it creates its own isolated test folder and never touches your real files.
 
 ```bash
+git clone https://github.com/KeygenLTD/crypto-virus-defense-shield.git
+cd crypto-virus-defense-shield
 pip install -r requirements.txt
 
-# Terminal 1 — Start shield (keep running)
+# Terminal 1 — Start shield
 python src/interceptor/detector.py
 
-# Terminal 2 — Run safe simulator (encrypts only dummy files)
+# Terminal 2 — Run safe simulator (encrypts only dummy test files)
 python src/simulator/fake_ransomware.py
-# -> Terminal 1: [SHIELD] Ransomware behavior detected! HONEYPOT touched
+# -> Terminal 1: [SHIELD] Ransomware behavior detected!
 
-# Restore
+# Restore dummy files
 python src/simulator/restore.py
 ```
-
-### Download (EXE)
-
-No Python needed. Download the latest portable EXE from **Releases** → `CryptoVirusDefenseShield.exe` → Run. It lives in the system tray and auto-starts on boot.
-
-> GitHub Actions builds the EXE automatically on every push to `main` (see `Actions` tab → Artifacts).
 
 ### Project Structure
 

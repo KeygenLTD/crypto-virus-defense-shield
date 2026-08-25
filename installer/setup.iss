@@ -106,8 +106,10 @@ begin
 end;
 
 function InitializeUninstall(): Boolean;
+var
+  ResCode: Integer;
 begin
-  // Kill running exe on uninstall
-  Exec('taskkill', '/f /im CryptoVirusDefenseShield.exe', '', SW_HIDE, ewWaitUntilTerminated, Result);
+  // Kill running exe on uninstall (ignore result)
+  Exec('taskkill', '/f /im CryptoVirusDefenseShield.exe', '', SW_HIDE, ewWaitUntilTerminated, ResCode);
   Result := True;
 end;
