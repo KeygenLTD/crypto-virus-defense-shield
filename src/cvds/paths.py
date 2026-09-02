@@ -28,7 +28,6 @@ EXCLUDED_PARTS = {
     "program files",
     "program files (x86)",
     "programdata",
-    "appdata",
     "node_modules",
     ".git",
     ".venv",
