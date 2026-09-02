@@ -29,12 +29,13 @@ from src.cvds.defender import (
     launch_elevated,
 )
 from src.cvds.engine import BehaviorEngine, Detection, FileActivity
+from src.cvds.event_bundle import create_event_bundle
 from src.cvds.forensics import (
     capture_minidump,
     scan_live_process_for_aes,
     write_forensics_manifest,
 )
-from src.cvds.incidents import create_incident
+from src.cvds.incidents import create_incident, update_incident
 from src.cvds.paths import (
     discover_protected_roots,
     ensure_state_dirs,
@@ -278,12 +279,18 @@ class IncidentResponder:
                 "warning": "AES candidates require independent decryption validation",
             }
 
-        incident_path, _ = create_incident(
+        incident_path, incident_payload = create_incident(
             detection.to_dict(),
             candidate.to_dict() if candidate else None,
             response,
             artifacts,
         )
+        evidence_path = create_event_bundle(incident_payload)
+        if evidence_path:
+            incident_payload.setdefault("artifacts", {})["evidence_bundle"] = (
+                evidence_path
+            )
+            update_incident(incident_path, incident_payload)
         self.detection_count += 1
         log.critical(
             "Ransomware response: score=%s family=%s candidate=%s suspended=%s incident=%s",
