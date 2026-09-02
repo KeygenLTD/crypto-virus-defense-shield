@@ -1,7 +1,12 @@
 # Test artifacts - never commit real samples
 crypto-test/
+cvds-safe-simulation/
 *.dmp
 *.bin
 __pycache__/
 .venv/
+.pytest_cache/
+build/
+dist/
+*.spec
 *.log

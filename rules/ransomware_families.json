@@ -1,0 +1,116 @@
+{
+  "schema": 1,
+  "updated_utc": "2026-09-01",
+  "families": [
+    {
+      "name": "Medusa",
+      "platforms": ["Windows", "Linux", "ESXi"],
+      "extensions": [{"value": ".medusa", "score": 72}],
+      "ransom_notes": [{"pattern": "!!!READ_ME_MEDUSA!!!.txt", "score": 90}],
+      "process_names": [{"value": "gaze.exe", "score": 95}],
+      "source": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa25-071a"
+    },
+    {
+      "name": "Gunra",
+      "platforms": ["Windows", "Linux"],
+      "extensions": [{"value": ".crypt", "score": 42}],
+      "ransom_notes": [
+        {"pattern": "R3ADM3", "score": 85},
+        {"pattern": "R3ADM3.txt", "score": 85}
+      ],
+      "process_names": [],
+      "source": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa26-222a"
+    },
+    {
+      "name": "Interlock",
+      "platforms": ["Windows", "Linux"],
+      "extensions": [
+        {"value": ".interlock", "score": 78},
+        {"value": ".1nt3rlock", "score": 82}
+      ],
+      "ransom_notes": [{"pattern": "!__README__!.txt", "score": 90}],
+      "process_names": [],
+      "source": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa25-203a"
+    },
+    {
+      "name": "Akira",
+      "platforms": ["Windows", "Linux", "ESXi"],
+      "extensions": [
+        {"value": ".akira", "score": 78},
+        {"value": ".akiranew", "score": 82}
+      ],
+      "ransom_notes": [
+        {"pattern": "akira_readme.txt", "score": 90},
+        {"pattern": "akiranew.txt", "score": 86},
+        {"pattern": "fn.txt", "score": 38}
+      ],
+      "process_names": [],
+      "source": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa24-109a"
+    },
+    {
+      "name": "Play",
+      "platforms": ["Windows"],
+      "extensions": [{"value": ".play", "score": 78}],
+      "ransom_notes": [{"pattern": "ReadMe.txt", "score": 28}],
+      "process_names": [],
+      "source": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-352a"
+    },
+    {
+      "name": "RansomHub",
+      "platforms": ["Windows", "Linux", "ESXi"],
+      "extensions": [],
+      "ransom_notes": [{"pattern": "How To Restore Your Files.txt", "score": 92}],
+      "process_names": [],
+      "source": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa24-242a"
+    },
+    {
+      "name": "Black Basta",
+      "platforms": ["Windows", "Linux", "ESXi"],
+      "extensions": [{"value": ".basta", "score": 78}],
+      "ransom_notes": [{"pattern": "readme.txt", "score": 24}],
+      "process_names": [],
+      "source": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa24-131a"
+    },
+    {
+      "name": "LockBit 3.0",
+      "platforms": ["Windows", "Linux", "ESXi"],
+      "extensions": [],
+      "ransom_notes": [{"pattern": "*.README.txt", "score": 64}],
+      "process_names": [],
+      "source": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-075a"
+    },
+    {
+      "name": "Rhysida",
+      "platforms": ["Windows"],
+      "extensions": [{"value": ".rhysida", "score": 78}],
+      "ransom_notes": [
+        {"pattern": "CriticalBreachDetected.pdf", "score": 92},
+        {"pattern": "CriticalBreachDetected", "score": 82}
+      ],
+      "process_names": [],
+      "source": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-319a"
+    },
+    {
+      "name": "BianLian",
+      "platforms": ["Windows"],
+      "extensions": [{"value": ".bianlian", "score": 82}],
+      "ransom_notes": [],
+      "process_names": [],
+      "source": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-136a"
+    },
+    {
+      "name": "CL0P",
+      "platforms": ["Windows"],
+      "extensions": [
+        {"value": ".clop", "score": 78},
+        {"value": ".cl0p", "score": 78},
+        {"value": ".c_l_o_p", "score": 82},
+        {"value": ".c_i_0p", "score": 82},
+        {"value": ".cllp", "score": 74}
+      ],
+      "ransom_notes": [{"pattern": "ClopReadMe.txt", "score": 88}],
+      "process_names": [],
+      "source": "https://www.fortinet.com/blog/threat-research/ransomware-roundup-cl0p"
+    }
+  ]
+}

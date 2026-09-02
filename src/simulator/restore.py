@@ -1,20 +1,49 @@
-"""Restore XOR-encrypted files in TEST_DIR"""
+"""Restore files changed by the marker-guarded CVDS simulator."""
+
+from __future__ import annotations
+
+import argparse
 import os
+import tempfile
 from pathlib import Path
-TEST_DIR = Path(os.environ.get("TEMP", "C:/Temp")) / "opencode" / "crypto-test"
-ALLOWED_ROOT = Path(os.environ.get("TEMP", "C:/Temp")) / "opencode"
-def is_safe(p: Path):
-    try: p.resolve().relative_to(ALLOWED_ROOT.resolve()); return True
-    except: return False
-def xor(b: bytes, k=0x5A): return bytes(x ^ k for x in b)
-for p in list(TEST_DIR.iterdir()):
-    if p.suffix == ".locked" and is_safe(p):
-        data = xor(p.read_bytes())
-        orig = p.with_suffix("")  # remove .locked
-        # handles .txt.locked -> .txt
-        if orig.suffix == "":
-            orig = p.with_name(p.name.replace(".locked",""))
-        orig.write_bytes(data)
-        p.unlink(missing_ok=True)
-        print(f"[RESTORE] {p.name} -> {orig.name}")
-print("[RESTORE] Done")
+
+try:
+    from .fake_ransomware import is_safe_root, xor_bytes
+except ImportError:
+    from fake_ransomware import is_safe_root, xor_bytes
+
+
+def restore(root: Path) -> int:
+    if not is_safe_root(root):
+        print("[BLOCKED] Missing or invalid CVDS simulation marker.")
+        return 2
+    restored = 0
+    for path in root.glob("*.cvdslocked"):
+        if path.parent.resolve() != root.resolve():
+            continue
+        original = path.with_suffix("")
+        original.write_bytes(xor_bytes(path.read_bytes()))
+        path.unlink()
+        restored += 1
+        print(f"[RESTORE] {path.name} -> {original.name}")
+    print(f"[RESTORE] Restored {restored} simulation file(s).")
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Restore CVDS safe simulation files")
+    parser.add_argument(
+        "--root",
+        type=Path,
+        default=Path(
+            os.environ.get(
+                "CVDS_SIMULATION_ROOT",
+                Path(tempfile.gettempdir()) / "cvds-safe-simulation",
+            )
+        ),
+    )
+    return restore(parser.parse_args().root)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
