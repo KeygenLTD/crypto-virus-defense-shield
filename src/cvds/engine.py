@@ -35,6 +35,7 @@ class Detection:
     source: str | None = None
     entropy: float | None = None
     burst_files: int = 0
+    renamed_files: int = 0
     indicator: dict | None = None
 
     def to_dict(self) -> dict:
@@ -80,12 +81,14 @@ class BehaviorEngine:
         burst_threshold: int = 18,
         burst_window_seconds: float = 2.0,
         entropy_threshold: float = 7.35,
+        rename_threshold: int = 12,
     ):
         self.canary_paths = {normalize_path(path) for path in canary_paths}
         self.profiles = profiles
         self.burst_threshold = max(4, int(burst_threshold))
         self.burst_window_seconds = max(0.5, float(burst_window_seconds))
         self.entropy_threshold = float(entropy_threshold)
+        self.rename_threshold = max(4, int(rename_threshold))
         self.activities: deque[FileActivity] = deque()
         self.last_alerts: dict[str, float] = {}
 
@@ -117,6 +120,12 @@ class BehaviorEngine:
             paths.append(activity.dest_path)
         distinct_paths = {normalize_path(item.target_path) for item in self.activities}
         burst_count = len(distinct_paths)
+        rename_paths = {
+            normalize_path(item.dest_path)
+            for item in self.activities
+            if item.kind == "moved" and item.dest_path
+        }
+        rename_count = len(rename_paths)
         score = 0
         reasons: list[str] = []
         family = None
@@ -145,6 +154,12 @@ class BehaviorEngine:
             if old_suffix != new_suffix:
                 score = min(100, score + 24)
                 reasons.append("file extension changed")
+
+        if rename_count >= self.rename_threshold:
+            score = max(score, 84)
+            reasons.append(
+                f"mass file renaming: {rename_count} files/{self.burst_window_seconds:g}s"
+            )
 
         if burst_count >= self.burst_threshold:
             score = max(score, 82)
@@ -182,5 +197,6 @@ class BehaviorEngine:
             source=source,
             entropy=entropy,
             burst_files=burst_count,
+            renamed_files=rename_count,
             indicator=indicator,
         )

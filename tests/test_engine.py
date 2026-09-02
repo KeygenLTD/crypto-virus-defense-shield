@@ -55,6 +55,22 @@ def test_mass_high_entropy_outputs_are_family_agnostic(tmp_path):
     assert engine.evaluate(FileActivity(100.5, "created", str(extra))) is None
 
 
+def test_mass_rename_is_detected_even_without_extension_change(tmp_path):
+    engine = BehaviorEngine(set(), profiles(), rename_threshold=4)
+    detection = None
+    for index in range(4):
+        source = tmp_path / f"document-{index}.txt"
+        destination = tmp_path / f"document-{index}-renamed.txt"
+        source.write_text("ordinary content", encoding="utf-8")
+        destination.write_text("ordinary content", encoding="utf-8")
+        detection = engine.evaluate(
+            FileActivity(200 + index * 0.1, "moved", str(source), str(destination))
+        )
+    assert detection is not None
+    assert detection.renamed_files == 4
+    assert "mass file renaming" in detection.reasons[-1]
+
+
 def test_family_profile_schema_and_required_coverage():
     profile_path = Path(__file__).parents[1] / "rules" / "ransomware_families.json"
     payload = json.loads(profile_path.read_text(encoding="utf-8"))
