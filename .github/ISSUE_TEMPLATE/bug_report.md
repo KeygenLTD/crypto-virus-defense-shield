@@ -16,4 +16,4 @@ Steps + log from `crypto-virus-defense-shield.log`
 ...
 
 **OS:** [e.g. Windows 11]
-**Version:** [e.g. v0.2.0]
+**Version:** [e.g. v0.3.0]

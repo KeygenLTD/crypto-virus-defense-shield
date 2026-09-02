@@ -1,44 +1,114 @@
-name: Build EXE
+name: Test and build Windows release
 
 on:
   push:
     branches: [ main ]
+    tags: [ 'v*' ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+      - name: Run tests
+        run: python -m pytest -q
+
   build-windows:
+    needs: test
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - name: Install deps
         run: |
           pip install -r requirements.txt
-          pip install pyinstaller
-      - name: Build EXE (onefile, tray)
+          pip install pyinstaller==6.22.2
+      - name: Build protection agent
         run: |
-          pyinstaller --onefile --noconsole --add-data "locales;locales" --add-data "src/i18n;src/i18n" --hidden-import src.i18n --hidden-import src.i18n.translator --collect-submodules src --name CryptoVirusDefenseShield src/interceptor/detector.py
+          pyinstaller --onefile --noconsole --paths . --add-data "locales;locales" --add-data "rules;rules" --hidden-import pystray._win32 --name CryptoVirusDefenseShield src/interceptor/detector.py
+      - name: Build emergency cleanup utility
+        run: |
+          pyinstaller --onefile --noconsole --paths . --name CVDSEmergencyCleanup src/cleanup_launcher.py
+      - name: Smoke test packaged executables
+        shell: pwsh
+        run: |
+          $env:CVDS_STATE_DIR = Join-Path $env:RUNNER_TEMP "cvds-package-state"
+          & .\dist\CryptoVirusDefenseShield.exe --status
+          if ($LASTEXITCODE -ne 0) { Write-Warning "Protection agent status check failed; continuing" }
+          & .\dist\CVDSEmergencyCleanup.exe --status
+          if ($LASTEXITCODE -ne 0) { Write-Warning "Cleanup utility status check failed; continuing" }
       - name: Build Installer (Inno Setup)
         run: |
           choco install innosetup -y
           iscc installer/setup.iss
           dir dist
+      - name: Smoke test silent install and uninstall
+        shell: pwsh
+        run: |
+          $installDir = Join-Path $env:RUNNER_TEMP "cvds-install"
+          $setup = Resolve-Path ".\dist\CVDS-Setup-0.3.0.exe"
+          $install = Start-Process -FilePath $setup -ArgumentList @(
+            "/VERYSILENT",
+            "/SUPPRESSMSGBOXES",
+            "/NORESTART",
+            "/DIR=$installDir",
+            "/MERGETASKS=!entryshield,!cfa,!autostart,!desktopicon"
+          ) -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "Installer failed: $($install.ExitCode)" }
+          & "$installDir\CryptoVirusDefenseShield.exe" --status
+          if ($LASTEXITCODE -ne 0) { throw "Installed agent status check failed" }
+          $uninstall = Start-Process -FilePath "$installDir\unins000.exe" -ArgumentList @(
+            "/VERYSILENT",
+            "/SUPPRESSMSGBOXES",
+            "/NORESTART"
+          ) -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) { throw "Uninstaller failed: $($uninstall.ExitCode)" }
 
       - name: Upload EXE artifact
         uses: actions/upload-artifact@v6
         with:
           name: CryptoVirusDefenseShield-windows
+          if-no-files-found: error
           path: |
             dist/CryptoVirusDefenseShield.exe
+            dist/CVDSEmergencyCleanup.exe
             dist/CVDS-Setup-*.exe
-      - name: Release
-        if: startsWith(github.ref, 'refs/tags/v')
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build-windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download built Windows artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: CryptoVirusDefenseShield-windows
+          path: dist
+      - name: Publish GitHub release
         uses: softprops/action-gh-release@v2.4.1
         with:
           files: |
             dist/CryptoVirusDefenseShield.exe
+            dist/CVDSEmergencyCleanup.exe
             dist/CVDS-Setup-*.exe

@@ -3,14 +3,13 @@
 ## Supported Versions
 | Version | Supported |
 |---|---|
-| 0.2.x | ✅ |
+| 0.3.x | ✅ |
+| 0.2.x | Security fixes only |
 
 ## Reporting a Vulnerability
 Do not open a public issue for security vulnerabilities.
 
-Email: `security@keygenltd.example` or open a **private** Security Advisory via GitHub `Security -> Report a vulnerability`.
-
-We will acknowledge within 48h and patch within 14 days.
+Open a **private** Security Advisory via GitHub `Security -> Report a vulnerability`.
 
 ## Scope
 This tool is defensive. Do not use to create or distribute ransomware. Any misuse will be reported.

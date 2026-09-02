@@ -1,0 +1,332 @@
+From 6b031e19774c715461df43276dc486f0471c394c Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Wed, 2 Sep 2026 22:14:35 +0200
+Subject: [PATCH 1/4] feat: detect mass file renaming
+
+---
+ src/cvds/engine.py   | 16 ++++++++++++++++
+ tests/test_engine.py | 16 ++++++++++++++++
+ 2 files changed, 32 insertions(+)
+
+diff --git a/src/cvds/engine.py b/src/cvds/engine.py
+index 78aaa54..c9c6c0f 100644
+--- a/src/cvds/engine.py
++++ b/src/cvds/engine.py
+@@ -35,6 +35,7 @@ class Detection:
+     source: str | None = None
+     entropy: float | None = None
+     burst_files: int = 0
++    renamed_files: int = 0
+     indicator: dict | None = None
+ 
+     def to_dict(self) -> dict:
+@@ -80,12 +81,14 @@ class BehaviorEngine:
+         burst_threshold: int = 18,
+         burst_window_seconds: float = 2.0,
+         entropy_threshold: float = 7.35,
++        rename_threshold: int = 12,
+     ):
+         self.canary_paths = {normalize_path(path) for path in canary_paths}
+         self.profiles = profiles
+         self.burst_threshold = max(4, int(burst_threshold))
+         self.burst_window_seconds = max(0.5, float(burst_window_seconds))
+         self.entropy_threshold = float(entropy_threshold)
++        self.rename_threshold = max(4, int(rename_threshold))
+         self.activities: deque[FileActivity] = deque()
+         self.last_alerts: dict[str, float] = {}
+ 
+@@ -117,6 +120,12 @@ class BehaviorEngine:
+             paths.append(activity.dest_path)
+         distinct_paths = {normalize_path(item.target_path) for item in self.activities}
+         burst_count = len(distinct_paths)
++        rename_paths = {
++            normalize_path(item.dest_path)
++            for item in self.activities
++            if item.kind == "moved" and item.dest_path
++        }
++        rename_count = len(rename_paths)
+         score = 0
+         reasons: list[str] = []
+         family = None
+@@ -146,6 +155,12 @@ class BehaviorEngine:
+                 score = min(100, score + 24)
+                 reasons.append("file extension changed")
+ 
++        if rename_count >= self.rename_threshold:
++            score = max(score, 84)
++            reasons.append(
++                f"mass file renaming: {rename_count} files/{self.burst_window_seconds:g}s"
++            )
++
+         if burst_count >= self.burst_threshold:
+             score = max(score, 82)
+             reasons.append(
+@@ -182,5 +197,6 @@ class BehaviorEngine:
+             source=source,
+             entropy=entropy,
+             burst_files=burst_count,
++            renamed_files=rename_count,
+             indicator=indicator,
+         )
+diff --git a/tests/test_engine.py b/tests/test_engine.py
+index c8b548a..5b67e91 100644
+--- a/tests/test_engine.py
++++ b/tests/test_engine.py
+@@ -55,6 +55,22 @@ def test_mass_high_entropy_outputs_are_family_agnostic(tmp_path):
+     assert engine.evaluate(FileActivity(100.5, "created", str(extra))) is None
+ 
+ 
++def test_mass_rename_is_detected_even_without_extension_change(tmp_path):
++    engine = BehaviorEngine(set(), profiles(), rename_threshold=4)
++    detection = None
++    for index in range(4):
++        source = tmp_path / f"document-{index}.txt"
++        destination = tmp_path / f"document-{index}-renamed.txt"
++        source.write_text("ordinary content", encoding="utf-8")
++        destination.write_text("ordinary content", encoding="utf-8")
++        detection = engine.evaluate(
++            FileActivity(200 + index * 0.1, "moved", str(source), str(destination))
++        )
++    assert detection is not None
++    assert detection.renamed_files == 4
++    assert "mass file renaming" in detection.reasons[-1]
++
++
+ def test_family_profile_schema_and_required_coverage():
+     profile_path = Path(__file__).parents[1] / "rules" / "ransomware_families.json"
+     payload = json.loads(profile_path.read_text(encoding="utf-8"))
+-- 
+2.51.1
+
+
+From 70ef482e5a19ea202a68db32be9dd8a2d2d69579 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Wed, 2 Sep 2026 22:16:49 +0200
+Subject: [PATCH 2/4] fix: inspect AppData activity for dropped payloads
+
+---
+ src/cvds/paths.py | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/src/cvds/paths.py b/src/cvds/paths.py
+index 40b3efe..5466388 100644
+--- a/src/cvds/paths.py
++++ b/src/cvds/paths.py
+@@ -28,7 +28,6 @@ EXCLUDED_PARTS = {
+     "program files",
+     "program files (x86)",
+     "programdata",
+-    "appdata",
+     "node_modules",
+     ".git",
+     ".venv",
+-- 
+2.51.1
+
+
+From 7c64f7a14e5b8c5077192732365ee4ecd58ba88e Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Wed, 2 Sep 2026 22:29:20 +0200
+Subject: [PATCH 3/4] feat: add network roots rollback and evidence bundles
+
+---
+ src/cvds/event_bundle.py | 25 ++++++++++++++++++
+ src/cvds/paths.py        | 21 +++++++++++++++
+ src/cvds/rollback.py     | 55 ++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 101 insertions(+)
+ create mode 100644 src/cvds/event_bundle.py
+ create mode 100644 src/cvds/rollback.py
+
+diff --git a/src/cvds/event_bundle.py b/src/cvds/event_bundle.py
+new file mode 100644
+index 0000000..3d60506
+--- /dev/null
++++ b/src/cvds/event_bundle.py
+@@ -0,0 +1,25 @@
++"""Create a sanitized incident evidence bundle without including file contents."""
++
++from __future__ import annotations
++
++import json
++import zipfile
++
++from .paths import ensure_state_dirs
++
++
++def create_event_bundle(incident: dict) -> str | None:
++    incident_id = str(incident.get("incident_id", "incident"))
++    try:
++        target = ensure_state_dirs()["base"] / f"{incident_id}-evidence.zip"
++        safe = dict(incident)
++        candidate = dict(safe.get("candidate") or {})
++        candidate.pop("cmdline", None)
++        safe["candidate"] = candidate
++        with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED) as archive:
++            archive.writestr(
++                "incident.json", json.dumps(safe, indent=2, ensure_ascii=False)
++            )
++        return str(target)
++    except OSError:
++        return None
+diff --git a/src/cvds/paths.py b/src/cvds/paths.py
+index 5466388..b45e94e 100644
+--- a/src/cvds/paths.py
++++ b/src/cvds/paths.py
+@@ -14,6 +14,7 @@ DEFAULT_CONFIG = {
+     "response_mode": "suspend",
+     "protected_roots": [],
+     "include_data_drives": True,
++    "include_network_roots": True,
+     "burst_threshold": 18,
+     "burst_window_seconds": 2.0,
+     "entropy_threshold": 7.35,
+@@ -148,6 +149,24 @@ def _windows_data_drives() -> list[Path]:
+         return []
+ 
+ 
++def _windows_network_roots() -> list[Path]:
++    """Return currently mapped network drives without probing remote shares."""
++    if os.name != "nt":
++        return []
++    try:
++        import ctypes
++
++        buffer = ctypes.create_unicode_buffer(512)
++        ctypes.windll.kernel32.GetLogicalDriveStringsW(len(buffer), buffer)
++        result = []
++        for drive in [item for item in buffer[:].split("\x00") if item]:
++            if ctypes.windll.kernel32.GetDriveTypeW(drive) == 4:
++                result.append(Path(drive))
++        return result
++    except (AttributeError, OSError, TypeError, ValueError):
++        return []
++
++
+ def _unique_existing(paths: Iterable[Path]) -> list[Path]:
+     seen: set[str] = set()
+     result: list[Path] = []
+@@ -185,6 +204,8 @@ def discover_protected_roots(config: dict | None = None) -> list[Path]:
+             candidates.append(Path(os.environ[env_name]))
+     if config.get("include_data_drives", True):
+         candidates.extend(_windows_data_drives())
++    if config.get("include_network_roots", True):
++        candidates.extend(_windows_network_roots())
+ 
+     roots = _unique_existing(candidates)
+     if not roots and home.is_dir():
+diff --git a/src/cvds/rollback.py b/src/cvds/rollback.py
+new file mode 100644
+index 0000000..d5016ed
+--- /dev/null
++++ b/src/cvds/rollback.py
+@@ -0,0 +1,55 @@
++"""Bounded, local rollback copies for files touched by a high-confidence incident."""
++
++from __future__ import annotations
++
++import hashlib
++import os
++import shutil
++from pathlib import Path
++
++from .paths import ensure_state_dirs
++
++MAX_FILE_BYTES = 64 * 1024 * 1024
++
++
++def snapshot_file(path: str | Path, incident_id: str) -> dict | None:
++    source = Path(path)
++    try:
++        if not source.is_file() or source.stat().st_size > MAX_FILE_BYTES:
++            return None
++        root = ensure_state_dirs()["base"] / "rollback" / incident_id
++        root.mkdir(parents=True, exist_ok=True)
++        digest = hashlib.sha256(str(source).encode()).hexdigest()[:16]
++        target = root / f"{digest}-{source.name}"
++        shutil.copy2(source, target)
++        return {
++            "source": str(source),
++            "snapshot": str(target),
++            "sha256": _sha256(target),
++        }
++    except OSError:
++        return None
++
++
++def _sha256(path: Path) -> str:
++    digest = hashlib.sha256()
++    with path.open("rb") as handle:
++        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
++            digest.update(chunk)
++    return digest.hexdigest()
++
++
++def restore_snapshot(snapshot: str | Path, destination: str | Path) -> bool:
++    try:
++        source, target = Path(snapshot), Path(destination)
++        if not source.is_file() or not source.resolve().is_relative_to(
++            ensure_state_dirs()["base"].resolve()
++        ):
++            return False
++        target.parent.mkdir(parents=True, exist_ok=True)
++        temp = target.with_suffix(target.suffix + ".cvds-restore")
++        shutil.copy2(source, temp)
++        os.replace(temp, target)
++        return True
++    except (OSError, RuntimeError):
++        return False
+-- 
+2.51.1
+
+
+From dd269d22ac946e9c9462e16aca96e414d0a3d428 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Wed, 2 Sep 2026 22:29:46 +0200
+Subject: [PATCH 4/4] feat: attach sanitized incident evidence bundle
+
+---
+ src/interceptor/detector.py | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/src/interceptor/detector.py b/src/interceptor/detector.py
+index e87c67e..bfd5995 100644
+--- a/src/interceptor/detector.py
++++ b/src/interceptor/detector.py
+@@ -29,12 +29,13 @@ from src.cvds.defender import (
+     launch_elevated,
+ )
+ from src.cvds.engine import BehaviorEngine, Detection, FileActivity
++from src.cvds.event_bundle import create_event_bundle
+ from src.cvds.forensics import (
+     capture_minidump,
+     scan_live_process_for_aes,
+     write_forensics_manifest,
+ )
+-from src.cvds.incidents import create_incident
++from src.cvds.incidents import create_incident, update_incident
+ from src.cvds.paths import (
+     discover_protected_roots,
+     ensure_state_dirs,
+@@ -278,12 +279,18 @@ class IncidentResponder:
+                 "warning": "AES candidates require independent decryption validation",
+             }
+ 
+-        incident_path, _ = create_incident(
++        incident_path, incident_payload = create_incident(
+             detection.to_dict(),
+             candidate.to_dict() if candidate else None,
+             response,
+             artifacts,
+         )
++        evidence_path = create_event_bundle(incident_payload)
++        if evidence_path:
++            incident_payload.setdefault("artifacts", {})["evidence_bundle"] = (
++                evidence_path
++            )
++            update_incident(incident_path, incident_payload)
+         self.detection_count += 1
+         log.critical(
+             "Ransomware response: score=%s family=%s candidate=%s suspended=%s incident=%s",
+-- 
+2.51.1
+
