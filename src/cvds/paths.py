@@ -14,6 +14,7 @@ DEFAULT_CONFIG = {
     "response_mode": "suspend",
     "protected_roots": [],
     "include_data_drives": True,
+    "include_network_roots": True,
     "burst_threshold": 18,
     "burst_window_seconds": 2.0,
     "entropy_threshold": 7.35,
@@ -148,6 +149,24 @@ def _windows_data_drives() -> list[Path]:
         return []
 
 
+def _windows_network_roots() -> list[Path]:
+    """Return currently mapped network drives without probing remote shares."""
+    if os.name != "nt":
+        return []
+    try:
+        import ctypes
+
+        buffer = ctypes.create_unicode_buffer(512)
+        ctypes.windll.kernel32.GetLogicalDriveStringsW(len(buffer), buffer)
+        result = []
+        for drive in [item for item in buffer[:].split("\x00") if item]:
+            if ctypes.windll.kernel32.GetDriveTypeW(drive) == 4:
+                result.append(Path(drive))
+        return result
+    except (AttributeError, OSError, TypeError, ValueError):
+        return []
+
+
 def _unique_existing(paths: Iterable[Path]) -> list[Path]:
     seen: set[str] = set()
     result: list[Path] = []
@@ -185,6 +204,8 @@ def discover_protected_roots(config: dict | None = None) -> list[Path]:
             candidates.append(Path(os.environ[env_name]))
     if config.get("include_data_drives", True):
         candidates.extend(_windows_data_drives())
+    if config.get("include_network_roots", True):
+        candidates.extend(_windows_network_roots())
 
     roots = _unique_existing(candidates)
     if not roots and home.is_dir():
